@@ -2,6 +2,7 @@
 #include<string>
 #include<sstream>
 #include<fstream>
+#include<cstdio>
 #include<unordered_map>
 
 using namespace std;
@@ -52,6 +53,35 @@ class Database {
             }
         }
 
+        void compact(){
+            cout<< "Starting log compaction.. \n";
+
+            //1. Close the current log file so the os lets us delete it
+            if(logFile.is_open()){
+                logFile.close();
+            }
+
+            //2. Open a brand new temp file
+            string temp_filename = "temp.log";
+            ofstream tempFile(temp_filename);
+
+            //3. Iterate through our map and write ONLY the newest, curr values
+            for(auto const& [key,val] : store){
+                tempFile << "SET" << key << " " << val << "\n";
+            }
+
+            //4. Clost the temporary file to save it
+            tempFile.close();
+
+            //5. rename the old bloated file and rename the temp file
+            std::remove(db_filename.c_str());
+            std::rename(temp_filename.c_str(), db_filename.c_str());
+
+            logFile.open(db_filename, ios::app);
+
+            cout<< "Compaction complete! Log file optimized. \n";
+        }
+
 
         //database operations
         void set(string key, string value){
@@ -100,6 +130,7 @@ int main(){
     cout<< "-----------------------------------------------------------------------------\n";
     cout<< "Welcome to your custom KV-pair DATABASE. Type EXIT to quit \n";
     cout<< "Commands: SET<key><value> | GET<key> | DELETE<key> | UPDATE<key><value> \n";
+    cout<< "COMPACT (removes old redundant logs and makes db faster) \n";
     cout<< "-----------------------------------------------------------------------------\n";
 
     //The REPL (Read Eval Print Loop)
@@ -158,6 +189,9 @@ int main(){
             } else {
                 cout << "(err) Key not found \n";
             }
+        }
+        else if(command=="COMPACT"){
+            myDB.compact();
         }
         else{
             cout<< "(err) Unknown command: "<< command <<"\n";
