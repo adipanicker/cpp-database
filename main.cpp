@@ -4,6 +4,10 @@
 #include<fstream>
 #include<cstdio>
 #include<unordered_map>
+#include<winsock2.h>
+#include<ws2tcpip.h>
+
+#pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
 
@@ -67,7 +71,7 @@ class Database {
 
             //3. Iterate through our map and write ONLY the newest, curr values
             for(auto const& [key,val] : store){
-                tempFile << "SET" << key << " " << val << "\n";
+                tempFile << "SET " << key << " " << val << "\n";
             }
 
             //4. Clost the temporary file to save it
@@ -125,6 +129,69 @@ int main(){
    // 1. create myDB object from DATABASE class
    Database myDB("database.log");
 
+    //--- SETUP WINSOCK --- 
+    WSADATA wsaData;
+    if(WSAStartup(MAKEWORD(2,2), &wsaData)!= 0){
+        cout << "(err) Winsock failed to start. \n";
+        return 1;
+    }
+
+    //--- 2. CREATE The socket (The Door) ---
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(serverSocket==INVALID_SOCKET){
+        cout<<"(err) Error creating socket. \n";
+        WSACleanup();
+        return 1;
+    }
+
+    //3. Bind Socket
+    sockaddr_in serverAddr;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1"); //Localhost
+    serverAddr.sin_port = htons(8080); //PORT 8080
+
+    if(bind(serverSocket, (SOCKADDR*)&serverAddr, sizeof(serverAddr))==SOCKET_ERROR){
+        cout << "(err) Bind failed.\n";
+        closesocket(serverSocket);
+        WSACleanup();
+        return 1;
+    }
+
+    //4 Listen for Visitors
+    listen(serverSocket, 1);
+    cout << "Database Server is RUNNING on port 8080...\n";
+    cout << "Waiting for connections..\n";
+
+    // The Server Loop
+    while(true){
+        // Accept an incoming connection
+        SOCKET clientSocket = accept(serverSocket, NULL, NULL);
+        if (clientSocket == INVALID_SOCKET){
+            continue;
+        }
+        cout << "Clinet connected!\n";
+
+        //Read the message the client sent
+        char buffer[1024] = {0};
+        recv(clientSocket, buffer, sizeof(buffer),0);
+
+        //Convert their message to a string and process it!
+        string inputLine(buffer);
+        cout<< "Recived command: " << inputLine << "\n";
+
+        // Database Logic goes here
+        // Simple echo message for testing
+        string response = "Command recieved by C++ Database!\n";
+        send(clientSocket, response.c_str(), response.length(), 0);
+
+        //close connection
+        closesocket(clientSocket);
+    }
+
+    closesocket(serverSocket);
+    WSACleanup();
+
+
     string inputLine;
     cout << "\n";
     cout<< "-----------------------------------------------------------------------------\n";
@@ -134,68 +201,69 @@ int main(){
     cout<< "-----------------------------------------------------------------------------\n";
 
     //The REPL (Read Eval Print Loop)
-    while(true){
-        cout<< "db> ";
-        getline(cin, inputLine);
 
-        if(inputLine == "EXIT" || inputLine == "exit"){
-            cout<< "Shutting down database....\n";
-            break;
-        }
+    // while(true){
+    //     cout<< "db> ";
+    //     getline(cin, inputLine);
 
-        //streamstring for reading words seperated by space
-        stringstream ss(inputLine);
-        string command, key, value;
+    //     if(inputLine == "EXIT" || inputLine == "exit"){
+    //         cout<< "Shutting down database....\n";
+    //         break;
+    //     }
 
-        ss >> command;
-        if(command=="SET"){
-            ss >> key;
-            getline(ss >> ws, value);
-            myDB.set(key, value);
-            cout<< "OK\n";
-        }
-        else if(command=="GET"){
-            ss >> key;
-            string value = myDB.get(key);
-            if(value == ""){
-                cout << "(err) Key doesn't exist! \n";
-            } else{
-                cout << key << " " << value << "\n";
-            }
+    //     //streamstring for reading words seperated by space
+    //     stringstream ss(inputLine);
+    //     string command, key, value;
 
-        }
-        else if(command=="DELETE"){
-            ss>>key;
-            if(myDB.remove(key)){
-                cout<<"OK \n";
-            } else {
-                cout<< "(err) Key not found\n";
-            }
-        }
-        else if(command =="UPDATE"){
-            ss>> key;
-            string prevValue = myDB.get(key);
+    //     ss >> command;
+    //     if(command=="SET"){
+    //         ss >> key;
+    //         getline(ss >> ws, value);
+    //         myDB.set(key, value);
+    //         cout<< "OK\n";
+    //     }
+    //     else if(command=="GET"){
+    //         ss >> key;
+    //         string value = myDB.get(key);
+    //         if(value == ""){
+    //             cout << "(err) Key doesn't exist! \n";
+    //         } else{
+    //             cout << key << " " << value << "\n";
+    //         }
 
-            if(prevValue != ""){
-                cout<< "(prev value): " << prevValue << "\n";
+    //     }
+    //     else if(command=="DELETE"){
+    //         ss>>key;
+    //         if(myDB.remove(key)){
+    //             cout<<"OK \n";
+    //         } else {
+    //             cout<< "(err) Key not found\n";
+    //         }
+    //     }
+    //     else if(command =="UPDATE"){
+    //         ss>> key;
+    //         string prevValue = myDB.get(key);
 
-                getline(ss >> ws, value);
-               bool newValueSuccess = myDB.update(key, value);
-                if(newValueSuccess== true){
-                    cout << "(new value): " << value << "\n";
-                } else {
-                    cout << "Error in updating value \n";
-                }
-            } else {
-                cout << "(err) Key not found \n";
-            }
-        }
-        else if(command=="COMPACT"){
-            myDB.compact();
-        }
-        else{
-            cout<< "(err) Unknown command: "<< command <<"\n";
-        }
-    }
+    //         if(prevValue != ""){
+    //             cout<< "(prev value): " << prevValue << "\n";
+
+    //             getline(ss >> ws, value);
+    //            bool newValueSuccess = myDB.update(key, value);
+    //             if(newValueSuccess== true){
+    //                 cout << "(new value): " << value << "\n";
+    //             } else {
+    //                 cout << "Error in updating value \n";
+    //             }
+    //         } else {
+    //             cout << "(err) Key not found \n";
+    //         }
+    //     }
+    //     else if(command=="COMPACT"){
+    //         myDB.compact();
+    //     }
+    //     else{
+    //         cout<< "(err) Unknown command: "<< command <<"\n";
+    //     }
+    // }
     return 0;
 }
