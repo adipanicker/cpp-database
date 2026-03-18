@@ -169,23 +169,99 @@ int main(){
         if (clientSocket == INVALID_SOCKET){
             continue;
         }
-        cout << "Clinet connected!\n";
+        cout << "Client connected!\n";
 
         //Read the message the client sent
-        char buffer[1024] = {0};
-        recv(clientSocket, buffer, sizeof(buffer),0);
+        string networkBuffer = "";
 
-        //Convert their message to a string and process it!
-        string inputLine(buffer);
-        cout<< "Recived command: " << inputLine << "\n";
+        char buffer[1024];
+        while(true){
+            //Clear out old message from buffer
+            memset(buffer, 0, sizeof(buffer));
 
-        // Database Logic goes here
-        // Simple echo message for testing
-        string response = "Command recieved by C++ Database!\n";
-        send(clientSocket, response.c_str(), response.length(), 0);
+            //Wait for them to type
+            int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 
-        //close connection
+            //if bytesReceived is 0 or less, it means client closed their terminal
+            if(bytesReceived<=0){
+                cout<< "Client disconnected \n";
+                break;
+            }
+            //convert message to string
+            networkBuffer += buffer;
+
+            if(networkBuffer.find('\n')!= string::npos){
+                string inputLine = networkBuffer;
+
+                networkBuffer = "";
+
+            //clean up invisible newline chars
+            inputLine.erase(inputLine.find_last_not_of(" \n\r\t")+1);
+            cout<< "Received command: "<< inputLine << "\n";
+
+            // 1. Set up the string stream to read the network message
+            stringstream ss(inputLine);
+            string command, key, value, networkResponse;
+
+            // 2. Parse the command
+            ss >> command;
+
+            if (command == "SET") {
+                ss >> key;
+                getline(ss >> ws, value);
+                myDB.set(key, value);
+                networkResponse = "OK\r\n";
+            } 
+            else if (command == "GET") {
+                ss >> key;
+                string result = myDB.get(key);
+                if (result != "") {
+                    networkResponse = "\"" + result + "\"\r\n";
+                } else {
+                    networkResponse = "{nil}\r\n";
+                }
+            } 
+            else if (command == "DELETE") {
+                ss >> key;
+                if(myDB.remove(key)){
+                    networkResponse = "OK\r\n";
+                } else {
+                    networkResponse = "(err) Key not found\r\n";
+                }
+            }
+            else if (command == "UPDATE") {
+                ss >> key;
+                string prevValue = myDB.get(key);
+                if (prevValue != "") {
+                    getline(ss >> ws, value);
+                    myDB.update(key, value);
+                    networkResponse = "OK (Value updated from " + prevValue + ")\r\n";
+                } else {
+                    networkResponse = "(err) Key not found\r\n";
+                }
+            }
+            else if (command == "COMPACT") {
+                myDB.compact();
+                networkResponse = "OK (Log compacted)\r\n";
+            }
+            else if (command == "EXIT" || command == "exit") {
+                networkResponse = "Goodbye!\r\n";
+                send(clientSocket, networkResponse.c_str(), networkResponse.length(), 0);
+                cout << "Client requested to exit.\n";
+                break; // Break the inner loop to disconnect them
+            }
+            else {
+                networkResponse = "(err) Unknown command: " + command + "\r\n";
+            }
+              // 3. Send the final response back over the network!
+            send(clientSocket, networkResponse.c_str(), networkResponse.length(), 0);
+
+            }
+        }
+
+        //close connection after inner loop breaks
         closesocket(clientSocket);
+        cout << "Connection close. Waiting for new client...\n";
     }
 
     closesocket(serverSocket);
