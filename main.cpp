@@ -5,6 +5,7 @@
 #include<ws2tcpip.h>
 #include<thread>
 #include<vector>
+#include<chrono>
 #include "database.h"
 #include "wal.h"
 
@@ -100,7 +101,8 @@ int main(){
 
             // 2. Parse the command
             ss >> command;
-
+            
+            auto start = chrono::high_resolution_clock::now();
             //Transaction Commands
             if(command == "BEGIN"){
                 if(inTransaction){
@@ -205,6 +207,11 @@ int main(){
             else {
                 networkResponse = "(err) Unknown command: " + command + "\r\n";
             }
+
+            auto end = chrono::high_resolution_clock::now();
+            double ms = chrono::duration<double, milli>(end-start).count();
+
+            networkResponse += "Executed in " + to_string(ms) + "ms\r\n";
 
               // 3. Send the final response back over the network!
             send(clientSocket, networkResponse.c_str(), networkResponse.length(), 0);
