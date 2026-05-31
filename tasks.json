@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "g++",
+      "args": [
+        "-o",
+        "cpp-db",
+        "main.cpp",
+        "database.cpp",
+        "wal.cpp",
+        "display.cpp",
+        "-lws2_32",
+        "-std=c++17"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
