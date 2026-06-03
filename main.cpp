@@ -8,6 +8,7 @@
 #include<chrono>
 #include "database.h"
 #include "wal.h"
+#include "display.h"
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -164,7 +165,11 @@ int main(){
             else if (command == "GET") {
                 ss >> key;
                 string result = myDB.get(key);
-                networkResponse = result != "" ? "\"" + result + "\"\r\n" : "{nil}\r\n";
+                if (result != "") {
+                    networkResponse = Display::formatGet(key, result);
+                } else {
+                    networkResponse = "{nil}\r\n";
+                }
             }
             else if (command == "DELETE") {
                 ss >> key;
@@ -198,6 +203,17 @@ int main(){
             else if (command == "COMPACT") {
                 myDB.compact();
                 networkResponse = "OK (Log compacted)\r\n";
+            }
+            else if (command == ".keys") {
+                auto& store = myDB.getStore();
+                networkResponse = Display::formatStore(store);
+            }
+            else if (command == ".wal") {
+                string walContents = wal.readWAL();
+                networkResponse = Display::formatWAL(walContents);
+            }
+            else if (command == ".help") {
+                networkResponse = Display::formatHelp();
             }
             else if (command == "EXIT" || command == "exit") {
                 networkResponse = "Goodbye!\r\n";
